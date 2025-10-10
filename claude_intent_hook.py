@@ -23,27 +23,40 @@ IntentType = Literal["completion", "failure", "authorization"]
 
 
 async def read_transcript(transcript_path: str) -> str:
-    """Read the conversation transcript and extract Claude's last message."""
+    """Read the conversation transcript and extract Claude's last message with text content."""
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 
         # Parse JSONL format - each line is a JSON object
-        messages = [json.loads(line) for line in lines if line.strip()]
+        messages = []
+        for line in lines:
+            if line.strip():
+                try:
+                    messages.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    print(f"Skipping invalid JSON line: {e}", file=sys.stderr)
+                    continue
 
-        # Find the last assistant message
+        # Find the last assistant message that contains text content
+        # (Skip tool-only messages that have no text)
         for msg in reversed(messages):
-            if msg.get('role') == 'assistant':
+            # Role is inside the 'message' object
+            message_obj = msg.get('message', {})
+            if message_obj.get('role') == 'assistant':
                 # Extract text content from the message
-                content = msg.get('content', [])
+                content = message_obj.get('content', [])
+
                 if isinstance(content, list):
                     text_parts = [
                         block.get('text', '')
                         for block in content
                         if block.get('type') == 'text'
                     ]
-                    return ' '.join(text_parts)
-                elif isinstance(content, str):
+                    text = ' '.join(text_parts).strip()
+                    if text:  # Only return if there's actual text content
+                        return text
+                elif isinstance(content, str) and content.strip():
                     return content
 
         return ""
@@ -106,11 +119,6 @@ async def play_audio(audio_file: str) -> None:
     """Play audio file asynchronously without blocking."""
     audio_path = Path(__file__).parent / "audio" / audio_file
 
-    # 🔍 診斷點 1: 檔案是否存在
-    print(f"[DEBUG] Checking audio file: {audio_path}", file=sys.stderr)
-    print(f"[DEBUG] File exists: {audio_path.exists()}", file=sys.stderr)
-    print(f"[DEBUG] Absolute path: {audio_path.absolute()}", file=sys.stderr)
-
     if not audio_path.exists():
         print(f"Audio file not found: {audio_path}", file=sys.stderr)
         return
@@ -130,9 +138,6 @@ async def play_audio(audio_file: str) -> None:
             # Linux: use aplay (ALSA) or paplay (PulseAudio)
             cmd = ['aplay', str(audio_path)]
 
-        # 🔍 診斷點 2: 命令內容
-        print(f"[DEBUG] Running command: {' '.join(cmd)}", file=sys.stderr)
-
         # Run in background without waiting
         process = subprocess.Popen(
             cmd,
@@ -140,16 +145,12 @@ async def play_audio(audio_file: str) -> None:
             stderr=subprocess.DEVNULL
         )
 
-        # 🔍 診斷點 3: 程序狀態
-        print(f"[DEBUG] Process started, PID: {process.pid}", file=sys.stderr)
-
-        # ⭐ 修復 Race Condition：等待程序啟動
-        await asyncio.sleep(0.1)  # 給程序 100ms 啟動時間
+        # Wait for process to start and stabilize
+        await asyncio.sleep(0.1)
         poll_result = process.poll()
-        print(f"[DEBUG] Process poll result: {poll_result} (None=running)", file=sys.stderr)
 
         if poll_result is not None:
-            print(f"[ERROR] Process exited immediately with code: {poll_result}", file=sys.stderr)
+            print(f"Audio process exited with code: {poll_result}", file=sys.stderr)
 
     except Exception as e:
         print(f"Error playing audio: {e}", file=sys.stderr)
@@ -159,7 +160,6 @@ async def play_audio(audio_file: str) -> None:
 
 async def main():
     """Main hook execution."""
-    # 🔍 診斷：記錄 Hook 已觸發 + 重定向 stderr 到檔案
     from datetime import datetime
     trigger_log = Path(__file__).parent / "hook_triggered.log"
     debug_log = Path(__file__).parent / "hook_debug.log"
@@ -167,7 +167,7 @@ async def main():
     with open(trigger_log, 'a', encoding='utf-8') as f:
         f.write(f"{datetime.now().isoformat()} - Hook triggered\n")
 
-    # 重定向 stderr 到檔案
+    # Redirect stderr to debug log
     original_stderr = sys.stderr
     sys.stderr = open(debug_log, 'a', encoding='utf-8')
     print(f"\n{'='*60}", file=sys.stderr)
@@ -177,25 +177,22 @@ async def main():
     try:
         # Read hook input from stdin
         hook_input = json.loads(sys.stdin.read())
-
-        # 🔍 診斷：顯示完整 hook 輸入
         print(f"Hook input: {json.dumps(hook_input, indent=2)}", file=sys.stderr)
 
         hook_event = hook_input.get('hook_event_name')
         print(f"Hook event: {hook_event}", file=sys.stderr)
 
-        # ⭐ 優先處理：Notification hook 直接播放預設音效
+        # Handle Notification hook: play default sound
         if hook_event == 'Notification':
             print("Notification hook detected - playing default authorization sound", file=sys.stderr)
             await play_audio(AUDIO_FILES['authorization'])
             await asyncio.sleep(1.5)
-            # Notification hook: 空輸出或不輸出 JSON
             print(f"Hook completed (Notification mode)", file=sys.stderr)
             sys.stderr.close()
             sys.stderr = original_stderr
             sys.exit(0)
 
-        # Stop hook 流程：需要分類 intent
+        # Handle Stop hook: classify intent and play corresponding sound
         transcript_path = hook_input.get('transcript_path')
         if not transcript_path:
             print("No transcript path provided for Stop hook", file=sys.stderr)
@@ -218,17 +215,14 @@ async def main():
         intent = await classify_intent(last_message)
         print(f"Classified intent: {intent}", file=sys.stderr)
 
-        # Play corresponding audio (non-blocking)
+        # Play corresponding audio
         audio_file = AUDIO_FILES.get(intent)
         if audio_file:
             await play_audio(audio_file)
+            # Wait for audio process to stabilize
+            await asyncio.sleep(1.0)
 
-            # ⭐ 修復 Race Condition：確保音效程序啟動
-            await asyncio.sleep(1.0)  # 給音效播放器 1 秒啟動時間
-            print("[DEBUG] Waited for audio process to stabilize", file=sys.stderr)
-
-        # Stop hook: 不需要返回控制 JSON，只輸出 metadata 到 stderr
-        print(f"[RESULT] Intent: {intent}, Audio: {audio_file}", file=sys.stderr)
+        print(f"Intent: {intent}, Audio: {audio_file}", file=sys.stderr)
         print(f"Hook completed successfully", file=sys.stderr)
         sys.stderr.close()
         sys.stderr = original_stderr
