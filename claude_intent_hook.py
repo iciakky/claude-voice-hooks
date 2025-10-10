@@ -158,6 +158,32 @@ async def play_audio(audio_file: str) -> None:
         traceback.print_exc(file=sys.stderr)
 
 
+async def play_intent_audio(intent: IntentType) -> bool:
+    """
+    Play audio feedback for the given intent type.
+
+    Encapsulates audio file resolution, playback orchestration, and stabilization.
+
+    Args:
+        intent: The classified intent (completion, failure, authorization)
+
+    Returns:
+        True if audio playback was initiated successfully, False otherwise
+    """
+    audio_file = AUDIO_FILES.get(intent)
+    if not audio_file:
+        print(f"No audio file configured for intent: {intent}", file=sys.stderr)
+        return False
+
+    print(f"Playing audio for intent '{intent}': {audio_file}", file=sys.stderr)
+    await play_audio(audio_file)
+
+    # Wait for audio process to stabilize
+    await asyncio.sleep(1.0)
+
+    return True
+
+
 async def main():
     """Main hook execution."""
     from datetime import datetime
@@ -184,9 +210,8 @@ async def main():
 
         # Handle Notification hook: play default sound
         if hook_event == 'Notification':
-            print("Notification hook detected - playing default authorization sound", file=sys.stderr)
-            await play_audio(AUDIO_FILES['authorization'])
-            await asyncio.sleep(1.5)
+            print("Notification hook detected", file=sys.stderr)
+            await play_intent_audio('authorization')
             print(f"Hook completed (Notification mode)", file=sys.stderr)
             sys.stderr.close()
             sys.stderr = original_stderr
@@ -204,9 +229,7 @@ async def main():
         last_message = await read_transcript(transcript_path)
         if not last_message:
             print("No assistant message found in transcript", file=sys.stderr)
-            print("Playing default authorization sound", file=sys.stderr)
-            await play_audio(AUDIO_FILES['authorization'])
-            await asyncio.sleep(1.5)
+            await play_intent_audio('authorization')
             sys.stderr.close()
             sys.stderr = original_stderr
             sys.exit(0)
@@ -216,13 +239,8 @@ async def main():
         print(f"Classified intent: {intent}", file=sys.stderr)
 
         # Play corresponding audio
-        audio_file = AUDIO_FILES.get(intent)
-        if audio_file:
-            await play_audio(audio_file)
-            # Wait for audio process to stabilize
-            await asyncio.sleep(1.0)
+        await play_intent_audio(intent)
 
-        print(f"Intent: {intent}, Audio: {audio_file}", file=sys.stderr)
         print(f"Hook completed successfully", file=sys.stderr)
         sys.stderr.close()
         sys.stderr = original_stderr
