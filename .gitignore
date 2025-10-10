@@ -31,3 +31,7 @@ audio/**/*.mp3
 # Hook logs
 hook_triggered.log
 hook_debug.log
+
+# Claude Code and BMad directories (user-specific)
+.bmad-core/
+.claude/
