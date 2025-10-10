@@ -9,44 +9,59 @@ import json
 import sys
 import subprocess
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 # Configuration
 OLLAMA_MODEL = "gemma3n:e4b"
 
 
 @dataclass
-class IntentConfig:
-    """Configuration for a single intent type."""
-    name: str
+class IntentMetadata:
+    """Metadata for each intent type."""
     audio_file: str
     description_zh: str
 
 
-# Single source of truth for all intent types
-INTENT_REGISTRY = [
-    IntentConfig(
-        name="completion",
+class Intent(Enum):
+    """
+    Intent types with embedded configuration.
+
+    This is the single source of truth for all intent definitions.
+    To add a new intent, simply add a new enum member here.
+    """
+    COMPLETION = IntentMetadata(
         audio_file="completion.wav",
         description_zh="工作已完成，詢問使用者下一步要做什麼"
-    ),
-    IntentConfig(
-        name="failure",
+    )
+    FAILURE = IntentMetadata(
         audio_file="failure.wav",
         description_zh="作業失敗或遇到錯誤，請求使用者協助"
-    ),
-    IntentConfig(
-        name="authorization",
+    )
+    AUTHORIZATION = IntentMetadata(
         audio_file="authorization.wav",
         description_zh="工作進行中，等待使用者授權或選擇選項"
-    ),
-]
+    )
 
-# Derive all configuration from registry
-AUDIO_FILES = {cfg.name: cfg.audio_file for cfg in INTENT_REGISTRY}
-VALID_INTENTS = {cfg.name for cfg in INTENT_REGISTRY}
-IntentType = Literal["completion", "failure", "authorization"]  # Note: Python doesn't support dynamic Literal generation
+    @property
+    def audio_file(self) -> str:
+        """Get audio file path for this intent."""
+        return self.value.audio_file
+
+    @property
+    def description_zh(self) -> str:
+        """Get Chinese description for this intent."""
+        return self.value.description_zh
+
+    def __str__(self) -> str:
+        """String representation is lowercase name for consistency."""
+        return self.name.lower()
+
+
+# Derive all configuration from enum (auto-updates when new intents added)
+AUDIO_FILES = {str(intent): intent.audio_file for intent in Intent}
+VALID_INTENTS = {str(intent) for intent in Intent}
+DEFAULT_INTENT = Intent.AUTHORIZATION
 
 
 def validate_audio_files() -> None:
@@ -59,10 +74,10 @@ def validate_audio_files() -> None:
     audio_dir = Path(__file__).parent / "audio"
     missing_files = []
 
-    for cfg in INTENT_REGISTRY:
-        audio_path = audio_dir / cfg.audio_file
+    for intent in Intent:
+        audio_path = audio_dir / intent.audio_file
         if not audio_path.exists():
-            missing_files.append(f"{cfg.name}: {audio_path}")
+            missing_files.append(f"{intent}: {audio_path}")
 
     if missing_files:
         raise FileNotFoundError(
@@ -72,7 +87,7 @@ def validate_audio_files() -> None:
 
 def build_classification_prompt(message: str) -> str:
     """
-    Build classification prompt dynamically from INTENT_REGISTRY.
+    Build classification prompt dynamically from Intent enum.
 
     Args:
         message: The message to classify
@@ -81,11 +96,11 @@ def build_classification_prompt(message: str) -> str:
         Formatted prompt for the LLM
     """
     intent_descriptions = "\n".join(
-        f"{i+1}. {cfg.name} - {cfg.description_zh}"
-        for i, cfg in enumerate(INTENT_REGISTRY)
+        f"{i+1}. {str(intent)} - {intent.description_zh}"
+        for i, intent in enumerate(Intent)
     )
 
-    intent_list = "、".join(cfg.name for cfg in INTENT_REGISTRY)
+    intent_list = "、".join(str(intent) for intent in Intent)
 
     return f"""分析以下 AI 助手的訊息，判斷其意圖屬於以下哪一類：
 
@@ -140,7 +155,7 @@ async def read_transcript(transcript_path: str) -> str:
         return ""
 
 
-async def classify_intent(message: str) -> IntentType:
+async def classify_intent(message: str) -> Intent:
     """
     Use local Gemma model to classify Claude's message intent.
 
@@ -148,7 +163,7 @@ async def classify_intent(message: str) -> IntentType:
         message: The message to classify
 
     Returns:
-        Classified intent type, defaults to 'authorization' on error
+        Classified Intent enum member, defaults to DEFAULT_INTENT on error
     """
     prompt = build_classification_prompt(message)
 
@@ -167,25 +182,28 @@ async def classify_intent(message: str) -> IntentType:
 
         result = stdout.decode('utf-8').strip().lower()
 
-        # Validate result using registry
+        # Validate result and convert to enum
         if result in VALID_INTENTS:
-            return result
+            # Find matching enum member
+            for intent in Intent:
+                if str(intent) == result:
+                    return intent
 
         # Fallback: try to extract from result
-        for intent in VALID_INTENTS:
-            if intent in result:
+        for intent in Intent:
+            if str(intent) in result:
                 return intent
 
         # Default fallback
         print(f"Unable to classify intent from: {result}", file=sys.stderr)
-        return 'authorization'
+        return DEFAULT_INTENT
 
     except asyncio.TimeoutError:
         print("Ollama request timed out", file=sys.stderr)
-        return 'authorization'
+        return DEFAULT_INTENT
     except Exception as e:
         print(f"Error calling Ollama: {e}", file=sys.stderr)
-        return 'authorization'
+        return DEFAULT_INTENT
 
 
 async def play_audio(audio_file: str) -> None:
@@ -231,25 +249,20 @@ async def play_audio(audio_file: str) -> None:
         traceback.print_exc(file=sys.stderr)
 
 
-async def play_intent_audio(intent: IntentType) -> bool:
+async def play_intent_audio(intent: Intent) -> bool:
     """
     Play audio feedback for the given intent type.
 
     Encapsulates audio file resolution, playback orchestration, and stabilization.
 
     Args:
-        intent: The classified intent (completion, failure, authorization)
+        intent: The Intent enum member
 
     Returns:
         True if audio playback was initiated successfully, False otherwise
     """
-    audio_file = AUDIO_FILES.get(intent)
-    if not audio_file:
-        print(f"No audio file configured for intent: {intent}", file=sys.stderr)
-        return False
-
-    print(f"Playing audio for intent '{intent}': {audio_file}", file=sys.stderr)
-    await play_audio(audio_file)
+    print(f"Playing audio for intent '{intent}': {intent.audio_file}", file=sys.stderr)
+    await play_audio(intent.audio_file)
 
     # Wait for audio process to stabilize
     await asyncio.sleep(1.0)
@@ -294,7 +307,7 @@ async def main():
         # Handle Notification hook: play default sound
         if hook_event == 'Notification':
             print("Notification hook detected", file=sys.stderr)
-            await play_intent_audio('authorization')
+            await play_intent_audio(DEFAULT_INTENT)
             print(f"Hook completed (Notification mode)", file=sys.stderr)
             sys.stderr.close()
             sys.stderr = original_stderr
@@ -312,7 +325,7 @@ async def main():
         last_message = await read_transcript(transcript_path)
         if not last_message:
             print("No assistant message found in transcript", file=sys.stderr)
-            await play_intent_audio('authorization')
+            await play_intent_audio(DEFAULT_INTENT)
             sys.stderr.close()
             sys.stderr = original_stderr
             sys.exit(0)
