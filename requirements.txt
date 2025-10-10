@@ -1,0 +1,7 @@
+# No external Python packages required
+# This hook uses only Python standard library
+
+# System requirements:
+# - Python 3.7+
+# - Ollama with gemma-3n-E4B-it model
+# - Platform-specific audio players (built-in)
