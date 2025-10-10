@@ -112,8 +112,41 @@ def build_classification_prompt(message: str) -> str:
 請只回答 {intent_list} 其中之一，不要有其他文字。"""
 
 
+def extract_key_lines(text: str) -> str:
+    """
+    Extract first line and last two lines from text for intent classification.
+
+    This optimization reduces token count and focuses on the most informative parts:
+    - First line: Usually contains summary or main conclusion
+    - Last two lines: Often contain key action items or next steps
+
+    Args:
+        text: Full message text
+
+    Returns:
+        Extracted key lines joined with newlines
+    """
+    lines = [line for line in text.split('\n') if line.strip()]
+
+    if not lines:
+        return text
+
+    if len(lines) <= 3:
+        # If message is short, return as-is
+        return text
+
+    # Extract first line + last two lines
+    key_lines = [lines[0]] + lines[-2:]
+    return '\n'.join(key_lines)
+
+
 async def read_transcript(transcript_path: str) -> str:
-    """Read the conversation transcript and extract Claude's last message with text content."""
+    """
+    Read the conversation transcript and extract Claude's last message.
+
+    Returns only the first line and last two lines of the message
+    to optimize classification speed and accuracy.
+    """
     try:
         with open(transcript_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -143,11 +176,12 @@ async def read_transcript(transcript_path: str) -> str:
                         for block in content
                         if block.get('type') == 'text'
                     ]
-                    text = ' '.join(text_parts).strip()
-                    if text:  # Only return if there's actual text content
-                        return text
+                    full_text = ' '.join(text_parts).strip()
+                    if full_text:
+                        # Extract key lines for classification
+                        return extract_key_lines(full_text)
                 elif isinstance(content, str) and content.strip():
-                    return content
+                    return extract_key_lines(content)
 
         return ""
     except Exception as e:
