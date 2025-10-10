@@ -8,18 +8,93 @@ import asyncio
 import json
 import sys
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Literal
 
 # Configuration
 OLLAMA_MODEL = "gemma3n:e4b"
-AUDIO_FILES = {
-    "completion": "completion.wav",  # 工作完成詢問下一步
-    "failure": "failure.wav",        # 作業失敗請求協助
-    "authorization": "authorization.wav"  # 等待使用者授權或選擇
-}
 
-IntentType = Literal["completion", "failure", "authorization"]
+
+@dataclass
+class IntentConfig:
+    """Configuration for a single intent type."""
+    name: str
+    audio_file: str
+    description_zh: str
+
+
+# Single source of truth for all intent types
+INTENT_REGISTRY = [
+    IntentConfig(
+        name="completion",
+        audio_file="completion.wav",
+        description_zh="工作已完成，詢問使用者下一步要做什麼"
+    ),
+    IntentConfig(
+        name="failure",
+        audio_file="failure.wav",
+        description_zh="作業失敗或遇到錯誤，請求使用者協助"
+    ),
+    IntentConfig(
+        name="authorization",
+        audio_file="authorization.wav",
+        description_zh="工作進行中，等待使用者授權或選擇選項"
+    ),
+]
+
+# Derive all configuration from registry
+AUDIO_FILES = {cfg.name: cfg.audio_file for cfg in INTENT_REGISTRY}
+VALID_INTENTS = {cfg.name for cfg in INTENT_REGISTRY}
+IntentType = Literal["completion", "failure", "authorization"]  # Note: Python doesn't support dynamic Literal generation
+
+
+def validate_audio_files() -> None:
+    """
+    Validate that all configured audio files exist at startup.
+
+    Raises:
+        FileNotFoundError: If any required audio file is missing
+    """
+    audio_dir = Path(__file__).parent / "audio"
+    missing_files = []
+
+    for cfg in INTENT_REGISTRY:
+        audio_path = audio_dir / cfg.audio_file
+        if not audio_path.exists():
+            missing_files.append(f"{cfg.name}: {audio_path}")
+
+    if missing_files:
+        raise FileNotFoundError(
+            f"Missing audio files for intents:\n" + "\n".join(f"  - {f}" for f in missing_files)
+        )
+
+
+def build_classification_prompt(message: str) -> str:
+    """
+    Build classification prompt dynamically from INTENT_REGISTRY.
+
+    Args:
+        message: The message to classify
+
+    Returns:
+        Formatted prompt for the LLM
+    """
+    intent_descriptions = "\n".join(
+        f"{i+1}. {cfg.name} - {cfg.description_zh}"
+        for i, cfg in enumerate(INTENT_REGISTRY)
+    )
+
+    intent_list = "、".join(cfg.name for cfg in INTENT_REGISTRY)
+
+    return f"""分析以下 AI 助手的訊息，判斷其意圖屬於以下哪一類：
+
+{intent_descriptions}
+
+訊息內容：
+{message}
+
+請只回答 {intent_list} 其中之一，不要有其他文字。"""
 
 
 async def read_transcript(transcript_path: str) -> str:
@@ -66,18 +141,16 @@ async def read_transcript(transcript_path: str) -> str:
 
 
 async def classify_intent(message: str) -> IntentType:
-    """Use local Gemma model to classify Claude's message intent."""
+    """
+    Use local Gemma model to classify Claude's message intent.
 
-    prompt = f"""分析以下 AI 助手的訊息，判斷其意圖屬於以下哪一類：
+    Args:
+        message: The message to classify
 
-1. completion - 工作已完成，詢問使用者下一步要做什麼
-2. failure - 工作失敗或遇到錯誤，請求使用者協助
-3. authorization - 工作進行中，等待使用者授權或選擇選項
-
-訊息內容：
-{message}
-
-請只回答 completion、failure 或 authorization 其中之一，不要有其他文字。"""
+    Returns:
+        Classified intent type, defaults to 'authorization' on error
+    """
+    prompt = build_classification_prompt(message)
 
     try:
         # Call Ollama API using subprocess
@@ -94,12 +167,12 @@ async def classify_intent(message: str) -> IntentType:
 
         result = stdout.decode('utf-8').strip().lower()
 
-        # Validate result
-        if result in ['completion', 'failure', 'authorization']:
+        # Validate result using registry
+        if result in VALID_INTENTS:
             return result
 
         # Fallback: try to extract from result
-        for intent in ['completion', 'failure', 'authorization']:
+        for intent in VALID_INTENTS:
             if intent in result:
                 return intent
 
@@ -199,6 +272,16 @@ async def main():
     print(f"\n{'='*60}", file=sys.stderr)
     print(f"Hook started at {datetime.now().isoformat()}", file=sys.stderr)
     print(f"{'='*60}", file=sys.stderr)
+
+    # Validate configuration at startup
+    try:
+        validate_audio_files()
+        print("Audio file validation passed", file=sys.stderr)
+    except FileNotFoundError as e:
+        print(f"Configuration error: {e}", file=sys.stderr)
+        sys.stderr.close()
+        sys.stderr = original_stderr
+        sys.exit(1)
 
     try:
         # Read hook input from stdin
