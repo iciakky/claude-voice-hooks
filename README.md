@@ -2,6 +2,10 @@
 
 當 Claude Code 停下來等待使用者回應時，自動分析意圖並播放對應的音效提示。
 
+> ⚠️ **重要提醒：本專案不包含音效檔案**
+> Clone 後必須自行準備音效檔案才能運行。最低需求：`audio/fallback.wav`
+> 詳見「快速開始」第 3 步驟。
+
 ## 功能特性
 
 - ✅ **自動意圖分類**：使用本地 Gemma-3n-E4B-it 模型分析 Claude 的訊息
@@ -20,7 +24,34 @@
 
 1. **Python 3.7+**
 2. **Ollama** 與 **gemma3n:e4b** 模型
-3. **音效檔案**（需自行準備，參見 [AUDIO_SETUP.md](AUDIO_SETUP.md)）
+3. **音效檔案**（**必須自行準備**，參見 [AUDIO_SETUP.md](AUDIO_SETUP.md)）
+   - 最低需求：`audio/fallback.wav`
+   - 建議：為每個 intent 目錄新增音效
+
+⚠️ **注意：專案不包含音效檔案，clone 後必須自行準備才能運行。**
+
+## ⚡ 新使用者檢查清單
+
+Clone 後必須完成的步驟：
+
+**前置需求：**
+- [ ] Python 3.7+ 已安裝
+- [ ] Ollama 已安裝並運行
+- [ ] 已下載 gemma3n:e4b 模型（`ollama pull gemma3n:e4b`）
+
+**設定步驟：**
+- [ ] 從 `settings.json.template` 建立 `settings.json`
+- [ ] 替換 `settings.json` 中的專案路徑
+- [ ] **建立 `audio/fallback.wav`**（必要！）
+- [ ] （可選）為各 intent 目錄新增音效
+
+**驗證：**
+- [ ] 執行 `python claude_intent_hook.py` 無錯誤
+
+❌ 如果看到 "fallback.wav is required but missing" → 請先完成音效準備
+✅ 看到 "Audio file validation passed" → 可以開始使用！
+
+---
 
 ## 快速開始
 
@@ -36,35 +67,7 @@
 ollama pull gemma3n:e4b
 ```
 
-### 2. 準備音效檔案
-
-音效檔案採用**目錄驅動架構**，支援多音檔隨機選擇：
-
-```
-audio/
-├── completion/          # 工作完成音效（可放多個）
-│   ├── done1.wav
-│   ├── done2.wav
-│   └── excited.mp3
-├── failure/             # 失敗/錯誤音效（可放多個）
-│   ├── error1.wav
-│   └── oops.wav
-├── authorization/       # 等待授權音效（可放多個）
-│   ├── waiting1.wav
-│   ├── waiting2.wav
-│   └── thinking.mp3
-└── fallback.wav         # 備用音效（必要）
-```
-
-**重要說明：**
-- 每個 intent 目錄可放置**多個音檔**，系統會隨機選擇播放
-- 支援 `.wav` 和 `.mp3` 格式
-- 如果某個 intent 目錄為空，會播放 `fallback.wav`
-- **音效檔案不在版控中**，需自行準備
-
-📖 **詳細設定指南：** 請參閱 [AUDIO_SETUP.md](AUDIO_SETUP.md)
-
-### 3. 配置 Claude Code Hook
+### 2. 配置 Claude Code Hook
 
 **初次設定：**
 
@@ -86,13 +89,99 @@ cp settings.json.template settings.json
 - Windows: `%USERPROFILE%\.claude\settings.json`
 - macOS/Linux: `~/.claude/settings.json`
 
-### 4. 測試 Hook
+### 3. 準備音效檔案（必要步驟）
+
+⚠️ **重要：此專案不包含音效檔案，您必須自行準備。**
+
+**最低需求（必須完成）：**
+
+建立 `audio/fallback.wav` 作為備用音效：
 
 ```bash
-# 驗證音效配置
-python claude_intent_hook.py
-# 輸出：Audio file validation passed
+# 選項 1: 使用系統 TTS 產生（macOS）
+say -o audio/fallback.wav "通知"
 
+# 選項 2: 使用系統 TTS（Linux with espeak）
+espeak "notification" --stdout > audio/fallback.wav
+
+# 選項 3: 從其他來源複製任何 .wav 或 .mp3 檔案
+cp your-sound.wav audio/fallback.wav
+```
+
+**為什麼需要 fallback.wav？**
+- 當 intent 目錄（completion/failure/authorization）為空時，系統會使用此檔案
+- 這是唯一的必要檔案，沒有它將無法運行
+
+**建議配置（可選但推薦）：**
+
+為每個 intent 目錄新增音效以獲得更好的體驗：
+
+```bash
+# 新增多個 completion 音效變化
+cp done1.wav audio/completion/
+cp done2.wav audio/completion/
+cp excited.mp3 audio/completion/
+
+# 新增 failure 音效
+cp error.wav audio/failure/
+cp oops.wav audio/failure/
+
+# 新增 authorization 音效
+cp waiting.wav audio/authorization/
+cp thinking.mp3 audio/authorization/
+```
+
+**音效檔案目錄結構：**
+
+```
+audio/
+├── completion/          # 工作完成音效（可放多個）
+│   ├── done1.wav
+│   ├── done2.wav
+│   └── excited.mp3
+├── failure/             # 失敗/錯誤音效（可放多個）
+│   ├── error1.wav
+│   └── oops.wav
+├── authorization/       # 等待授權音效（可放多個）
+│   ├── waiting1.wav
+│   ├── waiting2.wav
+│   └── thinking.mp3
+└── fallback.wav         # 備用音效（必要）
+```
+
+**重要說明：**
+- 每個 intent 目錄可放置**多個音檔**，系統會隨機選擇播放
+- 支援 `.wav` 和 `.mp3` 格式
+- 如果某個 intent 目錄為空，會播放 `fallback.wav`
+- **音效檔案不在版控中**，每個使用者需自行準備
+
+📖 **詳細設定指南：** 請參閱 [AUDIO_SETUP.md](AUDIO_SETUP.md)
+
+### 4. 驗證設定
+
+```bash
+# 驗證配置（需先完成步驟 3）
+python claude_intent_hook.py
+
+# 成功輸出（所有 intent 都有音效）：
+# Audio file validation passed
+
+# 成功輸出（使用 fallback 模式）：
+# Audio configuration warnings:
+#   - completion: No audio files in completion/ (will use fallback.wav)
+#   - failure: No audio files in failure/ (will use fallback.wav)
+#   - authorization: No audio files in authorization/ (will use fallback.wav)
+# Audio file validation passed
+# ✅ 這也是正常的！系統會對所有 intent 使用 fallback.wav
+
+# 失敗輸出（缺少 fallback.wav）：
+# Configuration error: fallback.wav is required but missing!
+# ❌ 請回到步驟 3 建立 audio/fallback.wav
+```
+
+**驗證成功後：**
+
+```bash
 # 啟用 Claude Code debug 模式查看 hook 執行
 claude --debug
 ```

@@ -1,6 +1,35 @@
 # Audio Setup Guide
 
-Audio files are **not included** in version control. You need to provide your own audio files.
+⚠️ **Audio files are NOT included in version control. You MUST provide your own audio files.**
+
+## ⚠️ 必讀：最低需求
+
+**此專案不包含任何音效檔案。**您 clone 後必須自行準備：
+
+### 最低需求（必須完成，否則無法運行）
+
+建立 `audio/fallback.wav`：
+
+```bash
+# 選項 1: 使用系統 TTS（macOS）
+say -o audio/fallback.wav "通知"
+
+# 選項 2: 使用系統 TTS（Linux with espeak）
+espeak "notification" --stdout > audio/fallback.wav
+
+# 選項 3: 使用系統 TTS（Windows PowerShell）
+# (需要手動操作，或使用第三方工具)
+
+# 選項 4: 從其他來源複製
+cp /path/to/your/sound.wav audio/fallback.wav
+```
+
+**為什麼需要 fallback.wav？**
+- 當 intent 目錄（completion/failure/authorization）為空時，系統會使用此檔案
+- 這是唯一的必要檔案
+- **沒有此檔案，執行 `python claude_intent_hook.py` 會失敗**
+
+---
 
 ## Quick Setup
 

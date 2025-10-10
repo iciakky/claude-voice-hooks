@@ -1,4 +1,15 @@
-# Place your WAV audio files here:
-# - completion.wav
-# - failure.wav
-# - authorization.wav
+# Audio Directory Structure (Directory-Driven Architecture)
+#
+# This directory does NOT contain audio files in version control.
+# You MUST provide your own audio files.
+#
+# Directory structure:
+# audio/
+# ├── completion/       (place .wav or .mp3 files here)
+# ├── failure/          (place .wav or .mp3 files here)
+# ├── authorization/    (place .wav or .mp3 files here)
+# └── fallback.wav      (REQUIRED - used when intent dirs are empty)
+#
+# Minimum requirement: audio/fallback.wav
+#
+# See AUDIO_SETUP.md for detailed setup instructions.
