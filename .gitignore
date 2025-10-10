@@ -35,3 +35,6 @@ hook_debug.log
 # Claude Code and BMad directories (user-specific)
 .bmad-core/
 .claude/
+
+# User-specific settings (generated from template)
+settings.json

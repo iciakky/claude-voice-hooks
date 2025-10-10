@@ -66,9 +66,23 @@ audio/
 
 ### 3. 配置 Claude Code Hook
 
-專案根目錄的 `settings.json` 已包含 Hook 配置，Claude Code 會自動載入。
+**初次設定：**
 
-如果要在全域啟用，可將配置複製到：
+```bash
+# 從範本建立個人化設定檔
+cp settings.json.template settings.json
+
+# 編輯 settings.json，替換路徑為您的專案實際路徑
+# Windows 範例: python C:\Users\YourName\Projects\claude-voice-hooks\claude_intent_hook.py
+# macOS/Linux 範例: python /home/username/projects/claude-voice-hooks/claude_intent_hook.py
+```
+
+**專案本地 Hook：**
+- 編輯後的 `settings.json` 會被 Claude Code 自動載入
+- 此檔案已加入 `.gitignore`，不會進入版控
+
+**全域 Hook（可選）：**
+如果要在所有專案啟用，可將配置複製到：
 - Windows: `%USERPROFILE%\.claude\settings.json`
 - macOS/Linux: `~/.claude/settings.json`
 
@@ -119,8 +133,8 @@ cp error-sound.mp3 audio/failure/
         "hooks": [
           {
             "type": "command",
-            "command": "python F:\\repo\\claude-voice-hooks\\claude_intent_hook.py",
-            "timeout": 30000  # 調整此值（毫秒）
+            "command": "python /YOUR/PROJECT/PATH/claude_intent_hook.py",
+            "timeout": 30000  // 調整此值（毫秒）
           }
         ]
       }
@@ -128,6 +142,8 @@ cp error-sound.mp3 audio/failure/
   }
 }
 ```
+
+**注意：** 請替換 `/YOUR/PROJECT/PATH/` 為您的實際專案路徑。
 
 ### 新增自訂 Intent
 
@@ -255,7 +271,7 @@ python claude_intent_hook.py
 
 - 📖 [AUDIO_SETUP.md](AUDIO_SETUP.md) - 音效檔案設定完整指南
 - 📖 [ADDING_NEW_INTENT.md](ADDING_NEW_INTENT.md) - 如何新增自訂 Intent 類型
-- 📋 `settings.json` - Claude Code Hook 配置檔案
+- 📋 `settings.json.template` - Hook 配置範本（需複製為 `settings.json` 並自訂路徑）
 
 ## 授權
 

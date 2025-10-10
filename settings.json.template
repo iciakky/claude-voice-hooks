@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python /ABSOLUTE/PATH/TO/REPO/claude_intent_hook.py",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python /ABSOLUTE/PATH/TO/REPO/claude_intent_hook.py",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  }
+}
