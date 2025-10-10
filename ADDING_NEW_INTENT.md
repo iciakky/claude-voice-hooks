@@ -1,124 +1,253 @@
 # How to Add a New Intent
 
-Thanks to the **Intent Enum pattern**, adding a new intent requires changing **only ONE location**.
+Thanks to the **Intent Enum + Directory-Driven Architecture**, managing audio feedback is now completely code-free!
 
 ## Quick Guide
 
-### Adding "thinking" Intent
+### Adding a New Intent (Requires Code)
 
-**Single Change Required:**
-
-Edit `claude_intent_hook.py` and add a new enum member to the `Intent` class:
+Edit `claude_intent_hook.py` and add a new enum member:
 
 ```python
 class Intent(Enum):
-    """Intent types with embedded configuration."""
-
     COMPLETION = IntentMetadata(
-        audio_file="completion.wav",
         description_zh="工作已完成，詢問使用者下一步要做什麼"
     )
     FAILURE = IntentMetadata(
-        audio_file="failure.wav",
         description_zh="作業失敗或遇到錯誤，請求使用者協助"
     )
     AUTHORIZATION = IntentMetadata(
-        audio_file="authorization.wav",
         description_zh="工作進行中，等待使用者授權或選擇選項"
     )
-    # ✨ NEW: Add this single entry
+    # ✨ NEW: Add new intent
     THINKING = IntentMetadata(
-        audio_file="thinking.wav",
         description_zh="正在執行長時間思考或處理任務"
     )
 ```
 
-**Physical Asset:**
-Create `audio/thinking.wav` file
+Then create the audio directory:
+```bash
+mkdir audio/thinking
+cp your_thinking_sound.wav audio/thinking/
+```
 
-**That's it!** Everything else auto-updates:
-- ✅ Classification prompt regenerated from enum iteration
-- ✅ Validation logic includes new intent automatically
-- ✅ Audio file mapping auto-derived
-- ✅ Startup validation checks new file
-- ✅ Type safety enforced by enum
+---
 
-## What Gets Auto-Updated
+## 🎵 Managing Audio Files (Zero Code Changes!)
 
-| Component | How It Updates |
-|-----------|----------------|
-| **Type Hints** | `Intent` enum includes new member |
-| **Classification Prompt** | `build_classification_prompt()` iterates `Intent` enum |
-| **Validation Logic** | `VALID_INTENTS` derived from enum iteration |
-| **Audio Mapping** | `AUDIO_FILES` derived from enum iteration |
-| **Startup Checks** | `validate_audio_files()` iterates enum |
+### Adding Audio Variants
 
-## Benefits of Enum Pattern
+**No code changes needed!** Just add files to the intent directory:
 
-### ✅ Single Source of Truth
-- **One place to add intent**: Just the enum definition
-- **Zero duplication**: No separate lists or mappings to maintain
-- **Impossible to desync**: Configuration embedded in enum
+```bash
+# Add new variant for completion intent
+cp excited_completion.wav audio/completion/
 
-### ✅ Type Safety
-- **Compile-time checks**: Can't pass invalid intent
-- **IDE autocomplete**: `Intent.COMPLETION` shows all options
-- **Refactoring safety**: Rename Intent.COMPLETION → IDE updates all usages
+# Add multiple variants
+cp calm.wav audio/completion/
+cp professional.wav audio/completion/
+cp energetic.wav audio/completion/
 
-### ✅ Fail-Fast Behavior
-- **Startup validation**: Missing audio file → immediate error
-- **Runtime safety**: Type system prevents invalid values
-- **Clear error messages**: Exactly which file is missing
+# Supports .wav and .mp3
+cp new_sound.mp3 audio/failure/
+```
 
-### ✅ Developer Experience
+The system will **automatically discover and randomly select** from all audio files!
+
+### Current Audio Structure
+
+```
+audio/
+├── completion/          # 8 variants
+│   ├── completion.wav
+│   ├── completion1.wav
+│   ├── completion2.wav
+│   └── ... (randomly selected)
+├── failure/             # 5 variants
+│   ├── failure.wav
+│   ├── failure1.wav
+│   └── ...
+├── authorization/       # 18 variants!
+│   ├── authorization.wav
+│   ├── authorization1.wav
+│   └── ...
+└── fallback.wav         # Global fallback
+```
+
+### Removing Audio Variants
+
+```bash
+# Temporary disable (rename)
+mv audio/completion/annoying.wav audio/completion/annoying.wav.disabled
+
+# Permanent removal
+rm audio/completion/old_sound.wav
+
+# Move to backup
+mkdir audio/completion/_backup
+mv audio/completion/test*.wav audio/completion/_backup/
+```
+
+---
+
+## 🎯 How It Works
+
+### Discovery Process
+
+1. **Directory Scan**: System scans `audio/{intent}/` for `.wav` and `.mp3` files
+2. **Random Selection**: Each playback randomly picks from available files
+3. **Fallback**: If directory empty → uses `audio/fallback.wav`
+
+### Example Workflow
+
 ```python
-# Before (string-based)
-await play_intent_audio("completion")  # Typo risk: "completoin"
+# Code never changes!
+await play_intent_audio(Intent.COMPLETION)
 
-# After (enum-based)
-await play_intent_audio(Intent.COMPLETION)  # IDE autocomplete, no typos possible
+# What happens:
+# 1. Scan audio/completion/ → [completion.wav, completion1.wav, ...]
+# 2. Random choice → completion3.wav
+# 3. Play: audio/completion/completion3.wav
 ```
 
-## Comparison: Before vs After
+---
 
-### Before (List Registry Pattern)
-```
-To add "thinking" intent:
-1. Add to INTENT_REGISTRY list
-2. Update IntentType Literal
+## ✅ Benefits
 
-Risk: Forget step 2 → runtime errors
-```
+### Zero-Code Audio Management
+- ✅ **Add variants**: Just copy files to directory
+- ✅ **Remove variants**: Just delete files
+- ✅ **Test new sounds**: Drag & drop, restart hook
+- ✅ **A/B testing**: Add/remove without touching code
 
-### After (Enum Pattern)
-```
-To add "thinking" intent:
-1. Add Intent.THINKING enum member
-
-Risk: None - everything auto-derived!
-```
-
-## Advanced: Customizing Intent Behavior
-
-If you need per-intent custom behavior:
-
-```python
-class Intent(Enum):
-    COMPLETION = IntentMetadata(...)
-
-    @property
-    def needs_user_input(self) -> bool:
-        """Some intents require user interaction."""
-        return self in {Intent.AUTHORIZATION, Intent.FAILURE}
-
-    @property
-    def stabilization_delay(self) -> float:
-        """Different intents may need different delays."""
-        delays = {
-            Intent.COMPLETION: 1.0,
-            Intent.THINKING: 2.0,  # Longer audio
-        }
-        return delays.get(self, 1.0)
+### Semantic File Names
+```bash
+# Before: completion-1.wav, completion-2.wav (unclear)
+# After:
+audio/completion/
+├── excited.wav
+├── calm.wav
+├── professional.wav
+└── energetic.wav
 ```
 
-All extension points remain within the single `Intent` enum definition!
+### Natural Organization
+- Each intent has its own folder
+- Easy to see available variants
+- No file name conflicts
+- Simple backup/restore
+
+---
+
+## 🔧 Advanced Usage
+
+### Intent-Specific Moods
+
+Organize by context:
+```bash
+audio/completion/
+├── daytime-professional.wav
+├── daytime-casual.wav
+├── nighttime-quiet.wav
+└── weekend-fun.wav
+```
+
+### Temporary Testing
+
+```bash
+# Test new sound (no commit)
+cp experimental.wav audio/completion/test.wav
+
+# Remove if not good
+rm audio/completion/test.wav
+```
+
+### Batch Operations
+
+```bash
+# Add multiple sounds at once
+cp sounds/completion/*.wav audio/completion/
+
+# Archive old sounds
+tar -czf old_sounds.tar.gz audio/completion/*
+mv audio/completion/* audio/_archive/
+```
+
+---
+
+## 🚨 Validation
+
+### Startup Checks
+
+The system validates on startup:
+
+1. **Each intent has files OR fallback.wav exists**
+2. **Warns if intent directory empty** (will use fallback)
+3. **Fails if fallback missing when needed**
+
+### Example Output
+
+```
+Audio configuration warnings:
+  - thinking: No audio files in thinking/ (will use fallback.wav)
+
+[OK] Validation passed!
+```
+
+---
+
+## 📊 Architecture Benefits
+
+| Task | Before (Hardcoded) | After (Directory-Driven) |
+|------|-------------------|--------------------------|
+| **Add variant** | Edit code ❌ | Copy file ✅ |
+| **Remove variant** | Edit code ❌ | Delete file ✅ |
+| **Test sound** | Edit code ❌ | Drag & drop ✅ |
+| **See variants** | Read code | `ls audio/intent/` ✅ |
+| **Backup audio** | Manual select | `cp -r audio/intent/` ✅ |
+
+---
+
+## 🎵 File Format Support
+
+Supported formats:
+- `.wav` - Recommended (universal compatibility)
+- `.mp3` - Supported
+
+The system automatically discovers both formats in intent directories.
+
+---
+
+## 💡 Tips
+
+1. **Use descriptive names**: `excited.wav` better than `1.wav`
+2. **Keep fallback.wav**: Required if any intent has no audio
+3. **Test locally**: Add new sounds, restart hook, verify random selection
+4. **Version control**: Consider `.gitignore` for test sounds
+
+---
+
+## Example: Complete Workflow
+
+```bash
+# 1. Create new intent (code change - one time)
+# Add THINKING to Intent enum in claude_intent_hook.py
+
+# 2. Create directory
+mkdir audio/thinking
+
+# 3. Add audio files (no code changes!)
+cp thinking_sound1.wav audio/thinking/
+cp thinking_sound2.wav audio/thinking/
+cp processing.mp3 audio/thinking/
+
+# 4. Done! System auto-discovers:
+# - thinking_sound1.wav
+# - thinking_sound2.wav
+# - processing.mp3
+
+# 5. Add more variants anytime (still no code!)
+cp new_thinking.wav audio/thinking/
+```
+
+🎉 **Audio management is now a runtime concern, not a code concern!**

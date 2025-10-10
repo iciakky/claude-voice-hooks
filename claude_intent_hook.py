@@ -8,18 +8,20 @@ import asyncio
 import json
 import sys
 import subprocess
+import random
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import List
 
 # Configuration
 OLLAMA_MODEL = "gemma3n:e4b"
+AUDIO_EXTENSIONS = ('.wav', '.mp3')  # Supported audio formats
 
 
 @dataclass
 class IntentMetadata:
     """Metadata for each intent type."""
-    audio_file: str
     description_zh: str
 
 
@@ -28,25 +30,66 @@ class Intent(Enum):
     Intent types with embedded configuration.
 
     This is the single source of truth for all intent definitions.
-    To add a new intent, simply add a new enum member here.
+    Audio files are discovered from filesystem (audio/{intent}/ directory).
     """
     COMPLETION = IntentMetadata(
-        audio_file="completion.wav",
         description_zh="工作已完成，詢問使用者下一步要做什麼"
     )
     FAILURE = IntentMetadata(
-        audio_file="failure.wav",
         description_zh="作業失敗或遇到錯誤，請求使用者協助"
     )
     AUTHORIZATION = IntentMetadata(
-        audio_file="authorization.wav",
         description_zh="工作進行中，等待使用者授權或選擇選項"
     )
 
     @property
+    def audio_directory(self) -> Path:
+        """Get audio directory for this intent."""
+        return Path(__file__).parent / "audio" / str(self)
+
+    @property
+    def all_audio_files(self) -> List[Path]:
+        """
+        Discover all audio files in intent directory.
+
+        Returns:
+            List of audio files (.wav, .mp3) in the intent directory
+        """
+        audio_dir = self.audio_directory
+
+        if not audio_dir.exists():
+            return []
+
+        # Get all supported audio files (non-recursive)
+        files = []
+        for ext in AUDIO_EXTENSIONS:
+            files.extend(audio_dir.glob(f"*{ext}"))
+
+        return sorted(files)
+
+    @property
     def audio_file(self) -> str:
-        """Get audio file path for this intent."""
-        return self.value.audio_file
+        """
+        Randomly select audio file, with fallback support.
+
+        Returns:
+            Relative path from audio/ directory to play
+
+        Fallback chain:
+            1. Random file from intent directory (audio/{intent}/*.wav)
+            2. audio/fallback.wav if directory empty/missing
+        """
+        files = self.all_audio_files
+
+        if files:
+            # Random selection from intent directory
+            selected = random.choice(files)
+            # Return path relative to audio/ directory
+            audio_base = Path(__file__).parent / "audio"
+            return str(selected.relative_to(audio_base))
+
+        # Fallback to global fallback.wav
+        return "fallback.wav"
 
     @property
     def description_zh(self) -> str:
@@ -66,23 +109,48 @@ DEFAULT_INTENT = Intent.AUTHORIZATION
 
 def validate_audio_files() -> None:
     """
-    Validate that all configured audio files exist at startup.
+    Validate audio configuration at startup.
+
+    Checks:
+        1. Each intent has at least one audio file OR fallback.wav exists
+        2. Warns about empty intent directories (will use fallback)
 
     Raises:
-        FileNotFoundError: If any required audio file is missing
+        FileNotFoundError: If fallback.wav is missing when needed
     """
-    audio_dir = Path(__file__).parent / "audio"
-    missing_files = []
+    audio_base = Path(__file__).parent / "audio"
+    fallback_path = audio_base / "fallback.wav"
+
+    warnings = []
+    intents_without_audio = []
 
     for intent in Intent:
-        audio_path = audio_dir / intent.audio_file
-        if not audio_path.exists():
-            missing_files.append(f"{intent}: {audio_path}")
+        files = intent.all_audio_files
 
-    if missing_files:
+        if not files:
+            # Intent directory empty or missing
+            intents_without_audio.append(intent)
+            warnings.append(
+                f"{intent}: No audio files in {intent.audio_directory.name}/ "
+                f"(will use fallback.wav)"
+            )
+
+    # Check fallback exists if needed
+    if intents_without_audio and not fallback_path.exists():
         raise FileNotFoundError(
-            f"Missing audio files for intents:\n" + "\n".join(f"  - {f}" for f in missing_files)
+            f"fallback.wav is required but missing!\n"
+            f"The following intents have no audio files:\n" +
+            "\n".join(f"  - {intent}" for intent in intents_without_audio) +
+            f"\n\nPlease either:\n"
+            f"  1. Create audio files in their directories (audio/{{intent}}/)\n"
+            f"  2. Create {fallback_path}"
         )
+
+    # Log warnings
+    if warnings:
+        print("Audio configuration warnings:", file=sys.stderr)
+        for warning in warnings:
+            print(f"  - {warning}", file=sys.stderr)
 
 
 def build_classification_prompt(message: str) -> str:
@@ -295,8 +363,11 @@ async def play_intent_audio(intent: Intent) -> bool:
     Returns:
         True if audio playback was initiated successfully, False otherwise
     """
-    print(f"Playing audio for intent '{intent}': {intent.audio_file}", file=sys.stderr)
-    await play_audio(intent.audio_file)
+    audio_file = intent.audio_file  # Returns relative path or "fallback.wav"
+    audio_path = Path(__file__).parent / "audio" / audio_file
+
+    print(f"Playing audio for intent '{intent}': {audio_file}", file=sys.stderr)
+    await play_audio(str(audio_path))
 
     # Wait for audio process to stabilize
     await asyncio.sleep(1.0)

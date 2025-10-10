@@ -23,6 +23,11 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Project specific
-audio/*.wav
+# Audio files (user-specific, not version controlled)
+audio/**/*.wav
+audio/**/*.mp3
 !audio/.gitkeep
+
+# Hook logs
+hook_triggered.log
+hook_debug.log
