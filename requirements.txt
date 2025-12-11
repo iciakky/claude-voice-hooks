@@ -1,7 +1,17 @@
-# No external Python packages required
-# This hook uses only Python standard library
+# Claude Voice Hooks - Python Dependencies
+
+# Audio playback (cross-platform, stable)
+playsound3>=2.0.0
+
+# FastAPI server (Phase 1)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+
+# HTTP client (for testing)
+httpx>=0.25.0
 
 # System requirements:
-# - Python 3.7+
-# - Ollama with gemma-3n-E4B-it model
-# - Platform-specific audio players (built-in)
+# - Python 3.8+
+# - Ollama with gemma3n:e4b model (for intent classification)

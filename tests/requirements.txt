@@ -1,0 +1,26 @@
+# Test dependencies for Phase 1
+
+# Core testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-html>=3.2.0
+pytest-timeout>=2.1.0
+
+# HTTP testing
+httpx>=0.25.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Mocking and fixtures
+pytest-mock>=3.11.1
+
+# Performance testing
+pytest-benchmark>=4.0.0
+
+# Audio playback (cross-platform, stable)
+playsound3>=2.0.0
+
+# Additional utilities
+pyyaml>=6.0.0
+python-dotenv>=1.0.0

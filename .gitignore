@@ -25,12 +25,28 @@ Thumbs.db
 
 # Audio files (user-specific, not version controlled)
 audio/**/*.wav
+
+# Model files (large binaries, should not be in git)
+models/
+*.ckpt
+*.pth
+*.safetensors
+# Note: *.bin excluded from ignore - some are small dictionary files needed by the code
+
+# Reference audio files
+reference/*.wav
+reference/*.mp3
+
+# GPT-SoVITS runtime cache (auto-generated from pyopenjtalk)
+gpt_sovits/TEMP/
 audio/**/*.mp3
+audio/tmp/
 !audio/.gitkeep
 
-# Hook logs
+# Hook logs and state files
 hook_triggered.log
 hook_debug.log
+hook/.last_thinking_hash
 
 # Claude Code and BMad directories (user-specific)
 .bmad-core/

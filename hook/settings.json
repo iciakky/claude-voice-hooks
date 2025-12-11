@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python F:\\repo\\claude-voice-hooks\\hook\\think_aloud_hook.py",
+            "timeout": 5000,
+            "description": "Think aloud: Translate and speak Claude's thinking"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python F:\\repo\\claude-voice-hooks\\hook\\think_aloud_hook.py",
+            "timeout": 5000,
+            "description": "Think aloud: Translate and speak Claude's thinking"
+          }
+        ]
+      }
+    ]
+  }
+}

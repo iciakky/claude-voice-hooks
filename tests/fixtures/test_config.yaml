@@ -1,0 +1,19 @@
+# Test configuration for Phase 1
+server:
+  host: "127.0.0.1"
+  port: 8765
+
+audio_selector:
+  type: "classification"
+  audio_dir: "F:\\repo\\claude-voice-hooks\\audio"
+
+model_provider:
+  type: "ollama"
+  ollama:
+    model: "gemma3n:e4b"
+    base_url: "http://localhost:11434"
+    timeout: 30
+
+# Test-specific settings
+test_mode: true
+mock_audio_playback: true
