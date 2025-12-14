@@ -193,7 +193,13 @@ class TranslationTTSWorkerSystem:
 
                     self.stats["translation_processed"] += 1
 
+                except ValueError as e:
+                    # Expected error: Translation validation failed (model crash)
+                    logger.warning(f"[{req.request_id}] Translation validation failed: {e}")
+                    self.stats["translation_failed"] += 1
+
                 except Exception as e:
+                    # Unexpected errors: log with full stack trace
                     logger.error(f"[{req.request_id}] Translation failed: {e}", exc_info=True)
                     self.stats["translation_failed"] += 1
 

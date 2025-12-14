@@ -26,6 +26,28 @@ def _require_ollama():
         raise RuntimeError("python package 'ollama' not installed; run: pip install ollama")
 
 
+def is_valid_japanese_translation(text: str, source_text: str) -> bool:
+    """Check if translation is valid (not a model crash/hallucination).
+
+    Args:
+        text: Translated text
+        source_text: Original text
+
+    Returns:
+        False if: 1) output > 2x input length, or 2) >50% ASCII chars
+    """
+    if not text.strip():
+        return False
+
+    # Check 1: Prevent hallucination (length > 2x source)
+    if len(text) > len(source_text) * 2:
+        return False
+
+    # Check 2: Prevent ASCII-heavy output (model crash)
+    ascii_count = sum(1 for c in text if c.isascii() and c.isalnum())
+    return ascii_count / len(text) < 0.5
+
+
 def postprocess_for_tts(text: str) -> str:
     """Post-process translated Japanese text for better TTS pronunciation.
 
@@ -111,11 +133,11 @@ async def translate_to_japanese(text: str) -> str:
         Japanese translation
 
     Raises:
-        ValueError: If text is empty
+        ValueError: If text is empty or translation is invalid (model crash)
         RuntimeError: If translation fails
     """
-    text = (text or "").strip()
-    if not text:
+    source_text = (text or "").strip()
+    if not source_text:
         raise ValueError("text is required")
 
     base = _env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
@@ -130,9 +152,17 @@ async def translate_to_japanese(text: str) -> str:
         client = ollama.AsyncClient(host=base)
         response = await client.chat(
             model="my-translator",
-            messages=[{"role": "user", "content": f"Translate to Japanese:\n\n{text}"}]
+            messages=[{"role": "user", "content": f"Translate to Japanese:\n\n{source_text}"}]
         )
         japanese_text = response["message"]["content"].strip()
+
+        # Validate translation (detect model crash/hallucination)
+        if not is_valid_japanese_translation(japanese_text, source_text):
+            raise ValueError(
+                f"Invalid translation detected (likely model crash): "
+                f"source_len={len(source_text)}, output_len={len(japanese_text)}, "
+                f"ascii_ratio={sum(1 for c in japanese_text if c.isascii() and c.isalnum()) / len(japanese_text):.2%}"
+            )
 
         # Apply post-processing for better TTS pronunciation
         japanese_text = postprocess_for_tts(japanese_text)
