@@ -165,6 +165,10 @@ async def translate_to_japanese(text: str) -> str:
                 f"ascii_ratio={sum(1 for c in japanese_text if c.isascii() and c.isalnum()) / len(japanese_text):.2%}"
             )
 
+        # Log translation BEFORE post-processing (for quality analysis)
+        from server.core.translation_logger import log_translation
+        await log_translation(source_text, japanese_text)
+
         # Apply post-processing for better TTS pronunciation
         japanese_text = postprocess_for_tts(japanese_text)
 

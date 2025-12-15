@@ -1,6 +1,9 @@
 # Log files
 *.log
 
+# Translation logs (for LLM quality analysis)
+logs/
+
 # Python cache
 __pycache__/
 *.py[cod]
