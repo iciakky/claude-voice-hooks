@@ -149,9 +149,10 @@ async def translate_to_japanese(text: str) -> str:
     # The model is pre-configured to produce concise Japanese summaries
     try:
         # Use AsyncClient for non-blocking HTTP calls
+        model_name = os.environ.get("OLLAMA_MODEL", "my-translator")
         client = ollama.AsyncClient(host=base)
         response = await client.chat(
-            model="my-translator",
+            model=model_name,
             messages=[{"role": "user", "content": f"Translate to Japanese:\n\n{source_text}"}]
         )
         japanese_text = response["message"]["content"].strip()
