@@ -52,6 +52,11 @@ _config: Optional[Dict[str, Any]] = None
 _tts_engine: Optional[Any] = None  # VoicevoxEngine instance
 _translation_tts_worker: Optional[TranslationTTSWorkerSystem] = None
 
+# Deduplication state (prevent duplicate requests from concurrent hooks)
+_last_translation: Optional[str] = None  # Track last translation text
+_last_translation_time: Optional[float] = None  # Track last translation timestamp
+_dedup_lock: asyncio.Lock = asyncio.Lock()  # Protect deduplication check
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -198,6 +203,46 @@ async def translate_and_speak(request: TranslateAndSpeakRequest) -> TranslateAnd
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Translation+TTS system not initialized (check server logs for errors)"
+        )
+
+    # Deduplication: prevent concurrent hooks from sending duplicate requests
+    global _last_translation, _last_translation_time
+
+    try:
+        async def dedup_check():
+            global _last_translation, _last_translation_time
+            async with _dedup_lock:
+                current_time = time.time()
+
+                # Check if duplicate: same text AND within 1 second
+                is_duplicate = (
+                    request.text == _last_translation and
+                    _last_translation_time is not None and
+                    (current_time - _last_translation_time) <= 1.0
+                )
+
+                if not is_duplicate:
+                    _last_translation = request.text
+                    _last_translation_time = current_time
+
+                return is_duplicate
+
+        # Timeout to prevent deadlock (500ms is generous for simple check)
+        is_duplicate = await asyncio.wait_for(dedup_check(), timeout=0.5)
+
+    except asyncio.TimeoutError:
+        logger.warning(f"Failed to acquire dedup lock (timeout), rejecting request: {request.text[:50]}...")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server busy (deduplication lock timeout)"
+        )
+
+    if is_duplicate:
+        logger.info(f"Skipping duplicate request: {request.text[:50]}...")
+        return TranslateAndSpeakResponse(
+            status="skipped",
+            message="Duplicate request ignored",
+            queue_position=0
         )
 
     # Generate unique request ID
