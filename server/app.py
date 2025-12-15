@@ -253,6 +253,7 @@ async def translate_and_speak(request: TranslateAndSpeakRequest) -> TranslateAnd
     logger.info(f"[{request_id}] /translate_and_speak request: {request.text[:50]}...")
 
     # Enqueue for translation (background worker will handle rest)
+    # Note: Worker will detect『』and skip translation if needed
     await _translation_tts_worker.enqueue_translation(
         text=request.text,
         request_id=request_id,

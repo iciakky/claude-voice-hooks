@@ -11,7 +11,12 @@ Functionality:
 1. Extract last thinking content from transcript
 2. Skip if no thinking found or same as previous
 3. Call translation+TTS API to speak the thinking
-4. Error handling with detailed stderr output
+4. Additional notifications:
+   - On "Stop" event: Send "さあ、次どうします？"
+   - On "Notification" event:
+     * If message starts with "Claude needs your permission": Send "許可を願います！"
+     * Otherwise: Send "あの、続きはどうしますか？"
+5. Error handling with detailed stderr output
 
 Hook behavior: Always allows (never blocks operations)
 """
@@ -182,39 +187,69 @@ def call_translation_tts_api(text: str) -> bool:
         return False
 
 
+def get_additional_notification(hook_event: Optional[str], message: Optional[str]) -> Optional[str]:
+    """
+    Determine if additional notification is needed based on hook event and message.
+
+    Returns:
+        Japanese notification text if needed, None otherwise
+    """
+    if hook_event == "Stop":
+        return "『さあ、次どうします？』"
+    elif hook_event == "Notification":
+        # Check if Claude needs permission for tool use
+        if message and message.startswith("Claude needs your permission"):
+            return "『許可を願います！』"
+        else:
+            return "『あの、続きはどうしますか？』"
+
+    return None
+
+
 def main():
     """Main hook logic."""
     # Read hook input
     hook_input = read_stdin_json()
     transcript_path = hook_input.get("transcript_path")
+    hook_event = hook_input.get("hook_event_name")  # "PreToolUse", "Stop", or "Notification"
+    message = hook_input.get("message")  # Notification message
 
     # Extract last thinking
     thinking = get_last_thinking(transcript_path)
 
-    if not thinking:
-        # No thinking found - exit quietly
+    # Check if additional notification is needed
+    additional_notification = get_additional_notification(hook_event, message)
+
+    # If no thinking and no additional notification, exit quietly
+    if not thinking and not additional_notification:
         sys.exit(0)
 
-    # Check if same as previous
-    current_hash = compute_hash(thinking)
-    last_hash = read_last_hash()
+    # Send thinking content first (if found)
+    if thinking:
+        # Check if same as previous
+        current_hash = compute_hash(thinking)
+        last_hash = read_last_hash()
 
-    if current_hash == last_hash:
-        # Same as previous - skip
-        sys.exit(0)
+        if current_hash != last_hash:
+            # Send thinking content
+            success = call_translation_tts_api(thinking)
 
-    # Call API
-    success = call_translation_tts_api(thinking)
+            # Always update state to avoid retrying the same content
+            write_last_hash(current_hash)
 
-    # Always update state to avoid retrying the same content
-    write_last_hash(current_hash)
+            if not success:
+                # API call failed for thinking
+                # Error already logged to stderr
+                sys.exit(1)
 
-    if success:
-        sys.exit(0)
-    else:
-        # API call failed
-        # Error already logged to stderr
-        sys.exit(1)
+    # Send additional notification (if needed)
+    if additional_notification:
+        success = call_translation_tts_api(additional_notification)
+        if not success:
+            # API call failed for notification
+            sys.exit(1)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

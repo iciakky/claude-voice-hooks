@@ -178,8 +178,15 @@ class TranslationTTSWorkerSystem:
                 try:
                     logger.info(f"[{req.request_id}] Translating: {req.text[:50]}...")
 
-                    # Translate to Japanese
-                    japanese_text = await translate_to_japanese(req.text)
+                    # Check if text is pre-translated Japanese (wrapped in『』)
+                    if req.text.startswith("『") and req.text.endswith("』"):
+                        # Skip translation, use text as-is (TTS will ignore『』markers)
+                        japanese_text = req.text
+                        logger.info(f"[{req.request_id}] Pre-translated Japanese detected, skipping model call")
+                    else:
+                        # Translate to Japanese
+                        japanese_text = await translate_to_japanese(req.text)
+
                     logger.info(f"[{req.request_id}] Translation result: {japanese_text}")
 
                     # Enqueue to TTS queue
