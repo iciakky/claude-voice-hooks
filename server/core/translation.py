@@ -153,7 +153,7 @@ async def translate_to_japanese(text: str) -> str:
         client = ollama.AsyncClient(host=base)
         response = await client.chat(
             model=model_name,
-            messages=[{"role": "user", "content": f"Translate to Japanese:\n\n{source_text}"}]
+            messages=[{"role": "user", "content": f"あなたはラジオ番組で技術内容を解説する専門家で、時間制約のため一息で伝わる簡潔な一文にまとめて説明する必要があります。次のテキストを自然で簡潔な日本語に翻訳してください。背景と判断を軽く示したうえで、結論を落ち着いた丁寧調で述べ、余計な説明は時間の都合で省く必要があります。\nテキスト：\n\n{source_text}"}]
         )
         japanese_text = response["message"]["content"].strip()
 
